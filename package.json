@@ -1,5 +1,28 @@
 {
+  "name": "release-server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.525.0",
+    "fast-xml-parser": "^5.2.5",
+    "next": "^14.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "semver": "^7.5.4"
+  },
   "devDependencies": {
+    "@types/node": "^20.11.24",
+    "@types/react": "^18.2.61",
+    "@types/react-dom": "^18.2.19",
+    "@types/semver": "^7.5.8",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.1.0",
     "typescript": "5.8.3",
     "wrangler": "^4.20.5"
   }

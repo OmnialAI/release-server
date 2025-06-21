@@ -19,10 +19,6 @@ export async function POST(
     }
     
     const { target, arch, version } = params;
-    
-    // Extract format from query parameters
-    const url = new URL(req.url);
-
 
     // Validate parameters
     if (!target || !arch || !version) {

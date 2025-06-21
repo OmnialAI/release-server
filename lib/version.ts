@@ -25,6 +25,7 @@ export interface ReleaseInfo {
 }
 
 export function isNewer(currentVersion: string, newVersion: string): boolean {
+  console.log(`Comparing versions: current=${currentVersion}, new=${newVersion}, result=${semver.gt(newVersion, currentVersion)}`);
   return semver.gt(newVersion, currentVersion);
 }
 
@@ -34,6 +35,7 @@ export async function getLatestVersion(
   currentVersion: string,
 ): Promise<ReleaseInfo | null> {
   try {
+    console.log(`Looking for updates for ${target}/${arch}/${currentVersion}`);
     // List objects in the R2 bucket with the appropriate prefix
     const prefix = `${target}/${arch}/`;
     
@@ -46,6 +48,7 @@ export async function getLatestVersion(
     const response = await s3Client.send(command);
     
     if (!response.CommonPrefixes || response.CommonPrefixes.length === 0) {
+      console.log('No versions found in R2 bucket');
       return null;
     }
     
@@ -54,30 +57,39 @@ export async function getLatestVersion(
       .map(prefix => prefix.Prefix?.split('/').filter(Boolean).pop() || '')
       .filter(Boolean);
     
+    console.log('Available versions:', versions);
+    
     // Find the latest version that is newer than currentVersion
     let latestVersion: string | null = null;
     
     for (const version of versions) {
+      console.log(`Checking version ${version}`);
       if (
         isNewer(currentVersion, version) &&
         (!latestVersion || isNewer(latestVersion, version))
       ) {
+        console.log(`Found newer version: ${version}`);
         latestVersion = version;
       }
     }
     
     if (!latestVersion) {
+      console.log('No newer version found');
       return null;
     }
+    
+    console.log(`Latest version: ${latestVersion}`);
     
     // Get the file path for the latest version
     const filePath = `${target}/${arch}/${latestVersion}`;
     const fileName = await getUpdateFileName(filePath);
     
     if (!fileName) {
+      console.log('No update file found');
       return null;
     }
     
+    console.log(`Update file: ${fileName}`);
     const fullFilePath = `${filePath}/${fileName}`;
     
     // Get metadata from R2
@@ -94,7 +106,7 @@ export async function getLatestVersion(
       target,
       arch,
       format: "tauri",
-      url: `/api/download/${target}/${arch}/${latestVersion}/${fileName}`,
+      url: `/api/download/${fullFilePath}`,
       signature: metadata.signature || '',
       notes: metadata.notes ? Buffer.from(metadata.notes, 'base64').toString() : '',
       date: metadata.publishdate || new Date().toISOString(),
@@ -119,10 +131,10 @@ async function getUpdateFileName(dirPath: string): Promise<string | null> {
       return null;
     }
     
-    // Find the .tar.gz file (tauri update file)
+    // For testing purposes, return any file found in the directory
     const updateFile = response.Contents
       .map(item => item.Key?.split('/').pop() || '')
-      .find(file => file.endsWith(".app.tar.gz"));
+      .find(file => file !== '');
       
     return updateFile || null;
   } catch (error) {

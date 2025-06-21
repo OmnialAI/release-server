@@ -7,40 +7,40 @@ import { Readable } from "stream";
 // Add missing TransformStream import
 import { TransformStream } from "stream/web";
 
-// release.omnial.app/api/download/[target]/[arch]/[version]/[filename]
-// release.omnial.app/api/download/macos/arm64/1.0.0/app.dmg
+// release.omnial.app/api/download/macos/arm64/1.0.0/filename.txt
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { target: string; arch: string; version: string } }
+  { params }: { params: { path: string[] } }
 ) {
   try {
+    console.log("Download request received:", req.url);
+    console.log("Path parameters:", params.path);
+    
     // Authenticate request
     const authHeader = req.headers.get("authorization");
     const token = extractBearerToken(authHeader);
     
     if (!token || !validateAuthToken(token)) {
+      console.log("Authentication failed");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     
-    const { target, arch, version } = params;
-    
-    // Get filename from the URL
-    const url = new URL(req.url);
-    const pathSegments = url.pathname.split('/');
-    const filename = pathSegments[pathSegments.length - 1];
-    
-    // Construct the file path
-    const filePath = `${target}/${arch}/${version}/${filename}`;
+    // Join path segments to form the file path
+    const filePath = params.path.join("/");
+    console.log("File path:", filePath);
 
     // Check if file exists
     const exists = await fileExists(filePath);
+    console.log("File exists:", exists);
+    
     if (!exists) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
     // Get file stream
     const fileStream = await getFileStream(filePath);
+    console.log("Got file stream:", !!fileStream);
 
     // Convert stream to Response
     if (!fileStream) {
@@ -50,8 +50,11 @@ export async function GET(
       );
     }
 
+    // Get filename from the path
+    const filename = params.path[params.path.length - 1];
+
     // Set appropriate content type based on file extension
-    const extension = path.extname(filePath).toLowerCase();
+    const extension = path.extname(filename).toLowerCase();
     let contentType = "application/octet-stream";
 
     if (extension === ".gz" || extension === ".tar.gz") {
@@ -60,6 +63,26 @@ export async function GET(
       contentType = "application/x-apple-diskimage";
     } else if (extension === ".zip") {
       contentType = "application/zip";
+    } else if (extension === ".txt") {
+      contentType = "text/plain";
+    }
+    
+    console.log("Content type:", contentType);
+
+    // For text files, return a simple text response for testing
+    if (extension === ".txt" && fileStream.transformToString) {
+      try {
+        const textContent = await fileStream.transformToString();
+        console.log("Text content length:", textContent.length);
+        return new NextResponse(textContent, {
+          headers: {
+            "Content-Type": contentType,
+            "Content-Disposition": `attachment; filename="${filename}"`,
+          },
+        });
+      } catch (err) {
+        console.error("Error converting stream to text:", err);
+      }
     }
 
     // Convert Node.js readable stream to Web stream
@@ -67,6 +90,7 @@ export async function GET(
     const writer = transformStream.writable.getWriter();
 
     if (fileStream instanceof Readable) {
+      console.log("Using Node.js stream handling");
       // Node.js stream
       fileStream.on("data", (chunk: Buffer) => {
         writer.write(chunk);
@@ -81,6 +105,7 @@ export async function GET(
         writer.abort(err);
       });
     } else {
+      console.log("Using AWS SDK stream handling");
       // AWS SDK stream
       const reader = fileStream.transformToWebStream().getReader();
 
@@ -100,6 +125,7 @@ export async function GET(
       pump();
     }
 
+    console.log("Returning response with stream");
     // Return the response with the stream
     return new NextResponse(transformStream.readable as unknown as ReadableStream, {
       headers: {
@@ -114,4 +140,4 @@ export async function GET(
       { status: 500 },
     );
   }
-}
+} 

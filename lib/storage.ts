@@ -3,7 +3,6 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
-import { promisify } from "util";
 
 
 // R2 configuration
@@ -69,19 +68,8 @@ async function storeFileS3(
 }
 
 export async function getFileUrl(filePath: string): Promise<string> {
-  // Extract path components
-  const pathParts = filePath.split('/');
-  if (pathParts.length < 4) {
-    throw new Error("Invalid file path format");
-  }
-  
-  const target = pathParts[0];
-  const arch = pathParts[1];
-  const version = pathParts[2];
-  const filename = pathParts[pathParts.length - 1];
-  
   // Generate a URL using the new route structure
-  return `${process.env.BASE_URL || ""}/api/download/${target}/${arch}/${version}/${filename}`;
+  return `${process.env.BASE_URL || ""}/api/download/${filePath}`;
 }
 
 export async function fileExists(filePath: string): Promise<boolean> {
@@ -95,8 +83,8 @@ export async function fileExists(filePath: string): Promise<boolean> {
     try {
       await s3Client.send(command);
       return true;
-    } catch (error: any) {
-      if (error.name === 'NoSuchKey') {
+    } catch (error: unknown) {
+      if (typeof error === 'object' && error !== null && 'name' in error && error.name === 'NoSuchKey') {
         return false;
       }
       throw error;
