@@ -1,4 +1,5 @@
 import { fileExists, getFileStream } from "@/lib/storage";
+import { extractBearerToken, validateAuthToken } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import { Readable } from "stream";
@@ -6,13 +7,31 @@ import { Readable } from "stream";
 // Add missing TransformStream import
 import { TransformStream } from "stream/web";
 
+// release.omnial.app/api/download/[target]/[arch]/[version]/[filename]
+// release.omnial.app/api/download/macos/arm64/1.0.0/app.dmg
+
 export async function GET(
   req: NextRequest,
-  { params }: { params: { path: string[] } },
+  { params }: { params: { target: string; arch: string; version: string } }
 ) {
   try {
-    // Join path segments
-    const filePath = params.path.join("/");
+    // Authenticate request
+    const authHeader = req.headers.get("authorization");
+    const token = extractBearerToken(authHeader);
+    
+    if (!token || !validateAuthToken(token)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    
+    const { target, arch, version } = params;
+    
+    // Get filename from the URL
+    const url = new URL(req.url);
+    const pathSegments = url.pathname.split('/');
+    const filename = pathSegments[pathSegments.length - 1];
+    
+    // Construct the file path
+    const filePath = `${target}/${arch}/${version}/${filename}`;
 
     // Check if file exists
     const exists = await fileExists(filePath);
@@ -85,7 +104,7 @@ export async function GET(
     return new NextResponse(transformStream.readable as unknown as ReadableStream, {
       headers: {
         "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${path.basename(filePath)}"`,
+        "Content-Disposition": `attachment; filename="${filename}"`,
       },
     });
   } catch (error) {

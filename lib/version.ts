@@ -35,7 +35,7 @@ export async function getLatestVersion(
 ): Promise<ReleaseInfo | null> {
   try {
     // List objects in the R2 bucket with the appropriate prefix
-    const prefix = `desktop/alpha/${target}/${arch}/tauri/`;
+    const prefix = `${target}/${arch}/`;
     
     const command = new ListObjectsV2Command({
       Bucket: s3BucketName,
@@ -71,7 +71,7 @@ export async function getLatestVersion(
     }
     
     // Get the file path for the latest version
-    const filePath = `desktop/alpha/${target}/${arch}/tauri/${latestVersion}`;
+    const filePath = `${target}/${arch}/${latestVersion}`;
     const fileName = await getUpdateFileName(filePath);
     
     if (!fileName) {
@@ -94,7 +94,7 @@ export async function getLatestVersion(
       target,
       arch,
       format: "tauri",
-      url: `/api/download/${encodeURIComponent(fullFilePath)}`,
+      url: `/api/download/${target}/${arch}/${latestVersion}/${fileName}`,
       signature: metadata.signature || '',
       notes: metadata.notes ? Buffer.from(metadata.notes, 'base64').toString() : '',
       date: metadata.publishdate || new Date().toISOString(),

@@ -1,39 +1,31 @@
 import { extractBearerToken, validateAuthToken } from "@/lib/auth";
 import { FileMetadata, storeFile } from "@/lib/storage";
 import { NextRequest, NextResponse } from "next/server";
-import { promisify } from "util";
-import fs from "fs";
-import path from "path";
 
-// Disable body parsing, handle it manually
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+// release.omnial.app/api/upload/[target]/[arch]/[version]
+// release.omnial.app/api/upload/macos/arm64/1.0.0
 
 export async function POST(
   req: NextRequest,
-  {
-    params,
-  }: {
-    params: { target: string; arch: string; format: string; version: string };
-  },
+  { params }: { params: { target: string; arch: string; version: string } }
 ) {
   try {
-    // Validate authentication
+    // Authenticate request
     const authHeader = req.headers.get("authorization");
     const token = extractBearerToken(authHeader);
-
+    
     if (!token || !validateAuthToken(token)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    
+    const { target, arch, version } = params;
+    
+    // Extract format from query parameters
+    const url = new URL(req.url);
 
-    // Extract parameters
-    const { target, arch, format, version } = params;
 
     // Validate parameters
-    if (!target || !arch || !format || !version) {
+    if (!target || !arch || !version) {
       return NextResponse.json(
         { error: "Missing required parameters" },
         { status: 400 },
@@ -42,8 +34,7 @@ export async function POST(
 
     // Extract metadata from headers
     const signature = req.headers.get("x-signature") || "";
-    const publishDate =
-      req.headers.get("x-pub-date") || new Date().toISOString();
+    const publishDate = req.headers.get("x-pub-date") || new Date().toISOString();
     const notesBase64 = req.headers.get("x-notes") || "";
 
     // Decode notes from base64
@@ -51,28 +42,20 @@ export async function POST(
       ? Buffer.from(notesBase64, "base64").toString()
       : "";
 
-    // Create a temporary directory for file upload
-    const tmpDir = path.join(process.cwd(), "tmp");
-    if (!fs.existsSync(tmpDir)) {
-      fs.mkdirSync(tmpDir, { recursive: true });
-    }
+    // Get the file from the request
+    const formData = await req.formData();
+    const file = formData.get("file");
 
-    // Parse the multipart form data
-    const formData = await parseForm(req, tmpDir);
-
-    if (!formData.files || !formData.files.file) {
+    if (!file || !(file instanceof File)) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
-    const file = Array.isArray(formData.files.file)
-      ? formData.files.file[0]
-      : formData.files.file;
-
     // Read the file
-    const fileBuffer = await promisify(fs.readFile)(file.filepath);
+    const fileBuffer = Buffer.from(await file.arrayBuffer());
+    const filename = file.name;
 
     // Store the file
-    const filePath = `desktop/alpha/${target}/${arch}/${format}/${version}/${file.originalFilename}`;
+    const filePath = `${target}/${arch}/${version}/${filename}`;
     const metadata: FileMetadata = {
       signature,
       publishDate,
@@ -80,9 +63,6 @@ export async function POST(
     };
 
     const success = await storeFile(filePath, fileBuffer, metadata);
-
-    // Clean up temporary file
-    await promisify(fs.unlink)(file.filepath);
 
     if (!success) {
       return NextResponse.json(
@@ -103,11 +83,4 @@ export async function POST(
       { status: 500 },
     );
   }
-}
-
-// Function to parse multipart form data
-async function parseForm(req: NextRequest, tmpDir: string) {
-  // Placeholder implementation
-  // In a real app, you would use a library like formidable
-  return { files: { file: { filepath: "", originalFilename: "" } } };
-}
+} 

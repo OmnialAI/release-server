@@ -1,17 +1,27 @@
 import { getLatestVersion } from "@/lib/version";
 import { NextRequest, NextResponse } from "next/server";
+import { extractBearerToken, validateAuthToken } from "@/lib/auth";
+
+// release.omnial.app/api/version/[target]/[arch]/[current_version]
+// release.omnial.app/api/version/macos/arm64/1.0.0
 
 export async function GET(
   req: NextRequest,
-  {
-    params,
-  }: { params: { target: string; arch: string; current_version: string } },
+  { params }: { params: { target: string; arch: string; version: string } }
 ) {
   try {
-    const { target, arch, current_version } = params;
+    // Authenticate request
+    const authHeader = req.headers.get("authorization");
+    const token = extractBearerToken(authHeader);
+    
+    if (!token || !validateAuthToken(token)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    
+    const { target, arch, version } = params;
 
     // Validate parameters
-    if (!target || !arch || !current_version) {
+    if (!target || !arch || !version) {
       return NextResponse.json(
         { error: "Missing required parameters" },
         { status: 400 },
@@ -19,11 +29,11 @@ export async function GET(
     }
 
     // Get the latest version
-    const latestVersion = await getLatestVersion(target, arch, current_version);
+    const latestVersion = await getLatestVersion(target, arch, version);
 
     if (!latestVersion) {
       return NextResponse.json({
-        version: current_version,
+        version: version,
         message: "No updates available",
       });
     }
@@ -37,7 +47,7 @@ export async function GET(
       url: `${baseUrl}${latestVersion.url}`,
       signature: latestVersion.signature,
       notes: latestVersion.notes,
-      current_version: current_version,
+      current_version: version,
       target: target,
     });
   } catch (error) {
@@ -47,4 +57,4 @@ export async function GET(
       { status: 500 },
     );
   }
-}
+} 

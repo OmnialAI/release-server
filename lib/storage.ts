@@ -69,8 +69,19 @@ async function storeFileS3(
 }
 
 export async function getFileUrl(filePath: string): Promise<string> {
-  // Generate a URL for R2
-  return `${process.env.BASE_URL || ""}/api/download/${encodeURIComponent(filePath)}`;
+  // Extract path components
+  const pathParts = filePath.split('/');
+  if (pathParts.length < 4) {
+    throw new Error("Invalid file path format");
+  }
+  
+  const target = pathParts[0];
+  const arch = pathParts[1];
+  const version = pathParts[2];
+  const filename = pathParts[pathParts.length - 1];
+  
+  // Generate a URL using the new route structure
+  return `${process.env.BASE_URL || ""}/api/download/${target}/${arch}/${version}/${filename}`;
 }
 
 export async function fileExists(filePath: string): Promise<boolean> {
