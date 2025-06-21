@@ -1,0 +1,13 @@
+name = "release-server"
+main = "src/index.js"
+compatibility_date = "2022-07-12"
+
+# R2 bucket configuration
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "release-server-bucket"
+preview_bucket_name = "release-server-dev-bucket"
+
+# Environment variables
+[vars]
+CLOUDFLARE_ACCOUNT_ID = "0b1fecf0fe221cca7a711f11f83d5b0f" 

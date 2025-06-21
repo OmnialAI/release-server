@@ -21,7 +21,7 @@ export function verifyJWT(token: string): Record<string, any> | null {
   }
 }
 
-export function extractBearerToken(authHeader?: string): string | null {
+export function extractBearerToken(authHeader?: string | null): string | null {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return null;
   }

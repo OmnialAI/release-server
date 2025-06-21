@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import { Readable } from "stream";
 
+// Add missing TransformStream import
+import { TransformStream } from "stream/web";
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { path: string[] } },
@@ -46,7 +49,7 @@ export async function GET(
 
     if (fileStream instanceof Readable) {
       // Node.js stream
-      fileStream.on("data", (chunk) => {
+      fileStream.on("data", (chunk: Buffer) => {
         writer.write(chunk);
       });
 
@@ -54,7 +57,7 @@ export async function GET(
         writer.close();
       });
 
-      fileStream.on("error", (err) => {
+      fileStream.on("error", (err: Error) => {
         console.error("Error streaming file:", err);
         writer.abort(err);
       });
@@ -79,7 +82,7 @@ export async function GET(
     }
 
     // Return the response with the stream
-    return new NextResponse(transformStream.readable, {
+    return new NextResponse(transformStream.readable as unknown as ReadableStream, {
       headers: {
         "Content-Type": contentType,
         "Content-Disposition": `attachment; filename="${path.basename(filePath)}"`,

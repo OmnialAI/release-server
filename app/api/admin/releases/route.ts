@@ -1,9 +1,18 @@
 import { extractBearerToken, validateAuthToken } from "@/lib/auth";
-import { localStoragePath } from "@/lib/storage";
-import fs from "fs";
+import { ListObjectsV2Command, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
-import path from "path";
-import { promisify } from "util";
+
+// R2 configuration
+const s3Client = new S3Client({
+  region: "auto",
+  endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID || "",
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || "",
+  },
+});
+
+const s3BucketName = process.env.R2_BUCKET_NAME || "";
 
 interface Release {
   version: string;
@@ -37,86 +46,126 @@ export async function GET(req: NextRequest) {
 async function listReleases(): Promise<Release[]> {
   const releases: Release[] = [];
 
-  // Base path for releases
-  const basePath = path.join(localStoragePath, "desktop", "alpha");
+  try {
+    // List all objects with the desktop/alpha prefix
+    const command = new ListObjectsV2Command({
+      Bucket: s3BucketName,
+      Prefix: "desktop/alpha/",
+      Delimiter: "/"
+    });
 
-  // Check if directory exists
-  if (!fs.existsSync(basePath)) {
-    return releases;
-  }
+    const response = await s3Client.send(command);
+    
+    // Process the common prefixes (targets)
+    if (response.CommonPrefixes) {
+      for (const targetPrefix of response.CommonPrefixes) {
+        const target = targetPrefix.Prefix?.split('/')[2];
+        if (!target) continue;
 
-  // Get all targets
-  const targets = await promisify(fs.readdir)(basePath);
+        // List architectures for this target
+        const archCommand = new ListObjectsV2Command({
+          Bucket: s3BucketName,
+          Prefix: `desktop/alpha/${target}/`,
+          Delimiter: "/"
+        });
 
-  for (const target of targets) {
-    const targetPath = path.join(basePath, target);
-    if (!fs.statSync(targetPath).isDirectory()) continue;
+        const archResponse = await s3Client.send(archCommand);
+        
+        if (archResponse.CommonPrefixes) {
+          for (const archPrefix of archResponse.CommonPrefixes) {
+            const arch = archPrefix.Prefix?.split('/')[3];
+            if (!arch) continue;
 
-    // Get all architectures
-    const architectures = await promisify(fs.readdir)(targetPath);
+            // List formats for this architecture
+            const formatCommand = new ListObjectsV2Command({
+              Bucket: s3BucketName,
+              Prefix: `desktop/alpha/${target}/${arch}/`,
+              Delimiter: "/"
+            });
 
-    for (const arch of architectures) {
-      const archPath = path.join(targetPath, arch);
-      if (!fs.statSync(archPath).isDirectory()) continue;
+            const formatResponse = await s3Client.send(formatCommand);
+            
+            if (formatResponse.CommonPrefixes) {
+              for (const formatPrefix of formatResponse.CommonPrefixes) {
+                const format = formatPrefix.Prefix?.split('/')[4];
+                if (!format) continue;
 
-      // Get all formats
-      const formats = await promisify(fs.readdir)(archPath);
+                // List versions for this format
+                const versionCommand = new ListObjectsV2Command({
+                  Bucket: s3BucketName,
+                  Prefix: `desktop/alpha/${target}/${arch}/${format}/`,
+                  Delimiter: "/"
+                });
 
-      for (const format of formats) {
-        const formatPath = path.join(archPath, format);
-        if (!fs.statSync(formatPath).isDirectory()) continue;
+                const versionResponse = await s3Client.send(versionCommand);
+                
+                if (versionResponse.CommonPrefixes) {
+                  for (const versionPrefix of versionResponse.CommonPrefixes) {
+                    const version = versionPrefix.Prefix?.split('/')[5];
+                    if (!version) continue;
 
-        // Get all versions
-        const versions = await promisify(fs.readdir)(formatPath);
+                    // Get files for this version
+                    const fileCommand = new ListObjectsV2Command({
+                      Bucket: s3BucketName,
+                      Prefix: `desktop/alpha/${target}/${arch}/${format}/${version}/`,
+                    });
 
-        for (const version of versions) {
-          const versionPath = path.join(formatPath, version);
-          if (!fs.statSync(versionPath).isDirectory()) continue;
-
-          // Get metadata from the first file in this directory
-          const files = await promisify(fs.readdir)(versionPath);
-
-          if (files.length > 0) {
-            const firstFile = files[0];
-            const metadataPath = path.join(
-              versionPath,
-              `${firstFile}.meta.json`,
-            );
-
-            let publishDate = new Date().toISOString();
-
-            if (fs.existsSync(metadataPath)) {
-              try {
-                const metadataContent = await promisify(fs.readFile)(
-                  metadataPath,
-                  "utf8",
-                );
-                const metadata = JSON.parse(metadataContent);
-                publishDate = metadata.publishDate || publishDate;
-              } catch (error) {
-                console.error(`Error reading metadata for ${version}:`, error);
+                    const fileResponse = await s3Client.send(fileCommand);
+                    
+                    if (fileResponse.Contents && fileResponse.Contents.length > 0) {
+                      // Get metadata from the first file
+                      const firstFile = fileResponse.Contents[0];
+                      
+                      if (firstFile.Key) {
+                        const metadataCommand = new GetObjectCommand({
+                          Bucket: s3BucketName,
+                          Key: firstFile.Key
+                        });
+                        
+                        try {
+                          const metadataResponse = await s3Client.send(metadataCommand);
+                          const metadata = metadataResponse.Metadata || {};
+                          
+                          releases.push({
+                            version,
+                            target,
+                            arch,
+                            format,
+                            publishDate: metadata.publishdate || new Date().toISOString(),
+                          });
+                        } catch (error) {
+                          console.error(`Error getting metadata for ${version}:`, error);
+                          
+                          // Still add the release with default publish date
+                          releases.push({
+                            version,
+                            target,
+                            arch,
+                            format,
+                            publishDate: new Date().toISOString(),
+                          });
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
-
-            releases.push({
-              version,
-              target,
-              arch,
-              format,
-              publishDate,
-            });
           }
         }
       }
     }
+
+    // Sort by version (newest first)
+    releases.sort((a, b) => {
+      return (
+        new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime()
+      );
+    });
+
+    return releases;
+  } catch (error) {
+    console.error("Error listing releases from R2:", error);
+    return [];
   }
-
-  // Sort by version (newest first)
-  releases.sort((a, b) => {
-    return (
-      new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime()
-    );
-  });
-
-  return releases;
 }
