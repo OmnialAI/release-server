@@ -1,6 +1,6 @@
 name = "release-server"
-main = "src/index.js"
-compatibility_date = "2022-07-12"
+main = "worker.js"
+compatibility_date = "2023-10-30"
 
 # R2 bucket configuration
 [[r2_buckets]]
@@ -10,4 +10,9 @@ preview_bucket_name = "release-server-dev-bucket"
 
 # Environment variables
 [vars]
-CLOUDFLARE_ACCOUNT_ID = "0b1fecf0fe221cca7a711f11f83d5b0f" 
+CLOUDFLARE_ACCOUNT_ID = "0b1fecf0fe221cca7a711f11f83d5b0f"
+R2_ACCESS_KEY_ID = "fd2946b80dc0de632140cf38a240e515"
+R2_SECRET_ACCESS_KEY = "087df8724428a8bcf047f48f8dbde6db69e10c2e34c816760000d9458153521a"
+R2_BUCKET_NAME = "release-server-bucket"
+AUTH_SECRET = "alpha-tester"
+BASE_URL = "https://release.omnial.app" 

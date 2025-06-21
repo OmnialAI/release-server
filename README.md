@@ -1,90 +1,145 @@
-# Omnial Release Server
+# Simple Release Server
 
-A simple release server for the Omnial desktop application, built with Next.js. This server handles both uploading and downloading of application updates, compatible with Tauri's updater system.
+A simplified release server for software updates, built as a Cloudflare Worker. This server provides API endpoints for checking for updates, downloading updates, and uploading new releases.
 
 ## Features
 
-- **Upload Endpoints**: Secure endpoints for uploading application builds
-- **Update Check**: Endpoints for clients to check for updates
-- **Download**: Secure file serving for updates
-- **Admin Interface**: Simple UI to view and manage releases
-- **Storage Options**: Local file system or S3-compatible storage
-
-## Setup
-
-1. Install dependencies:
-
-   ```bash
-   bun install
-   ```
-
-2. Configure environment variables:
-
-   - Copy `env.local` to `.env.local` and update the values
-   - Set storage configuration (local or S3)
-   - Set authentication secrets
-
-3. Run the development server:
-
-   ```bash
-   bun run dev
-   ```
-
-4. For production:
-   ```bash
-   bun run build
-   bun run start
-   ```
+- Version checking API endpoint
+- File download API endpoint
+- File upload API endpoint
+- Authentication via bearer tokens
+- Integration with Cloudflare R2 for file storage
 
 ## API Endpoints
 
-### Upload
+### Version Check
 
-- **POST** `/api/private/upload/desktop/alpha/{target}/{arch}/{format}/{version}`
-  - Uploads a file for a specific target, architecture, format, and version
-  - Requires Bearer token authentication
-  - Headers:
-    - `Authorization: Bearer <token>`
-    - `x-signature`: File signature
-    - `x-pub-date`: Publication date
-    - `x-notes`: Base64-encoded release notes
+```
+GET /api/version/:target/:arch/:current_version
+```
 
-### Update Check
+Checks if a newer version is available for the specified target, architecture, and current version.
 
-- **GET** `/api/recommend/desktop/alpha/{target}/{arch}/{current_version}`
-  - Checks for updates for a specific target, architecture, and current version
-  - Returns update information if available
+**Headers:**
+- `Authorization: Bearer <token>`
+
+**Response:**
+```json
+{
+  "version": "1.0.1",
+  "pub_date": "2023-10-30T12:00:00Z",
+  "url": "https://release.example.com/api/download/macos/arm64/1.0.1/app.zip",
+  "signature": "signature-hash",
+  "notes": "Release notes",
+  "current_version": "1.0.0",
+  "target": "macos"
+}
+```
 
 ### Download
 
-- **GET** `/api/download/{path}`
-  - Downloads a file at the specified path
-  - Handles streaming of large files
+```
+GET /api/download/:target/:arch/:version/:filename
+```
+
+Downloads a specific release file.
+
+**Headers:**
+- `Authorization: Bearer <token>`
+
+### Upload
+
+```
+POST /api/upload/:target/:arch/:version
+```
+
+Uploads a new release file.
+
+**Headers:**
+- `Authorization: Bearer <token>`
+- `Content-Type: multipart/form-data`
+
+**Form Data:**
+- `file`: The release file
+- `signature`: The signature for the file (optional)
+- `notes`: Release notes (optional)
+
+**Response:**
+```json
+{
+  "success": true,
+  "url": "https://release.example.com/api/download/macos/arm64/1.0.1/app.zip",
+  "version": "1.0.1",
+  "target": "macos",
+  "arch": "arm64"
+}
+```
+
+## Deployment
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (v16 or later)
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
+- Cloudflare account with Workers and R2 enabled
+
+### Setup
+
+1. Clone this repository
+2. Install dependencies:
+   ```
+   npm install
+   ```
+3. Configure your Cloudflare account in Wrangler:
+   ```
+   npx wrangler login
+   ```
+4. Create an R2 bucket:
+   ```
+   npx wrangler r2 bucket create release-server-bucket
+   ```
+5. Update the environment variables in `wrangler.toml`:
+   ```toml
+   [vars]
+   CLOUDFLARE_ACCOUNT_ID = "your-account-id"
+   R2_ACCESS_KEY_ID = "your-access-key-id"
+   R2_SECRET_ACCESS_KEY = "your-secret-access-key"
+   R2_BUCKET_NAME = "release-server-bucket"
+   AUTH_SECRET = "your-auth-secret"
+   BASE_URL = "https://your-worker-url.workers.dev"
+   ```
+
+### Development
+
+To run the server locally:
+
+```
+npm run dev
+```
+
+### Deployment
+
+To deploy to Cloudflare Workers:
+
+```
+npm run deploy
+```
 
 ## Authentication
 
-- Upload endpoints require a Bearer token for authentication
-- The token is defined in the environment variables
+The server uses bearer token authentication. The default token is `alpha-tester`, but you should change this in the environment variables for production use.
 
-## Admin Interface
+## File Structure
 
-- Visit `/admin` to view and manage releases
-- Requires authentication with the same Bearer token
+- `worker.js`: The main worker code
+- `wrangler.toml`: Cloudflare Workers configuration
+- `package.json`: Node.js dependencies
 
-## Compatibility
+## Environment Variables
 
-This server is designed to work with:
-
-- The Omnial desktop application's update system
-- The `upload.sh` script for uploading builds
-- Tauri's updater plugin
-
-## Storage
-
-The server supports two storage backends:
-
-1. **Local File System**: Files are stored in the local file system
-2. **S3-Compatible Storage**: Files are stored in an S3-compatible storage service
-
-Configure the storage backend in the environment variables.
-# release-server
+- `CLOUDFLARE_ACCOUNT_ID`: Your Cloudflare account ID
+- `R2_ACCESS_KEY_ID`: R2 access key ID
+- `R2_SECRET_ACCESS_KEY`: R2 secret access key
+- `R2_BUCKET_NAME`: R2 bucket name
+- `AUTH_SECRET`: Authentication token
+- `BASE_URL`: Base URL for the server (optional)
