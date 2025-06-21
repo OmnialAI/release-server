@@ -1,145 +1,90 @@
-# Simple Release Server
+# Release Server API Usage Guide
 
-A simplified release server for software updates, built as a Cloudflare Worker. This server provides API endpoints for checking for updates, downloading updates, and uploading new releases.
+This document provides instructions for using the release server API endpoints.
 
-## Features
+## Authentication
 
-- Version checking API endpoint
-- File download API endpoint
-- File upload API endpoint
-- Authentication via bearer tokens
-- Integration with Cloudflare R2 for file storage
+All endpoints require authentication using a Bearer token:
+
+```
+Authorization: Bearer alpha-tester
+```
 
 ## API Endpoints
 
-### Version Check
+### Check for Updates
 
 ```
-GET /api/version/:target/:arch/:current_version
+GET /api/version/{target}/{arch}/{version}
 ```
 
-Checks if a newer version is available for the specified target, architecture, and current version.
-
-**Headers:**
-- `Authorization: Bearer <token>`
+**Example:**
+```bash
+curl -X GET "https://release.omnial.app/api/version/macos/arm64/0.0.5" \
+  -H "Authorization: Bearer alpha-tester"
+```
 
 **Response:**
 ```json
 {
   "version": "1.0.1",
-  "pub_date": "2023-10-30T12:00:00Z",
-  "url": "https://release.example.com/api/download/macos/arm64/1.0.1/app.zip",
-  "signature": "signature-hash",
-  "notes": "Release notes",
-  "current_version": "1.0.0",
+  "pub_date": "2025-06-21T14:52:06.329Z",
+  "url": "https://release.omnial.app/api/download/macos/arm64/1.0.1/test-upload.txt",
+  "signature": "test-signature",
+  "notes": "Test upload via curl",
+  "current_version": "0.0.5",
   "target": "macos"
 }
 ```
 
-### Download
+### Download Release
 
 ```
-GET /api/download/:target/:arch/:version/:filename
+GET /api/download/{target}/{arch}/{version}/{filename}
 ```
 
-Downloads a specific release file.
-
-**Headers:**
-- `Authorization: Bearer <token>`
-
-### Upload
-
-```
-POST /api/upload/:target/:arch/:version
+**Example:**
+```bash
+curl -X GET "https://release.omnial.app/api/download/macos/arm64/1.0.1/test-upload.txt" \
+  -H "Authorization: Bearer alpha-tester" \
+  --output downloaded-file.txt
 ```
 
-Uploads a new release file.
+### Upload Release
 
-**Headers:**
-- `Authorization: Bearer <token>`
-- `Content-Type: multipart/form-data`
+```
+POST /api/upload/{target}/{arch}/{version}
+```
 
-**Form Data:**
-- `file`: The release file
-- `signature`: The signature for the file (optional)
-- `notes`: Release notes (optional)
+**Example:**
+```bash
+curl -X POST "https://release.omnial.app/api/upload/macos/arm64/1.0.2" \
+  -H "Authorization: Bearer alpha-tester" \
+  -F "file=@path/to/your/file.zip" \
+  -F "signature=your-signature-here" \
+  -F "notes=Release notes for this version"
+```
 
 **Response:**
 ```json
 {
   "success": true,
-  "url": "https://release.example.com/api/download/macos/arm64/1.0.1/app.zip",
-  "version": "1.0.1",
+  "url": "https://release.omnial.app/api/download/macos/arm64/1.0.2/file.zip",
+  "version": "1.0.2",
   "target": "macos",
   "arch": "arm64"
 }
 ```
 
-## Deployment
+## Parameters
 
-### Prerequisites
+- `target`: Target platform (e.g., macos, windows, linux)
+- `arch`: CPU architecture (e.g., arm64, x86_64)
+- `version`: Version string using semantic versioning (e.g., 1.0.0)
+- `filename`: Name of the file to download (only for download endpoint)
 
-- [Node.js](https://nodejs.org/) (v16 or later)
-- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
-- Cloudflare account with Workers and R2 enabled
+## File Upload Fields
 
-### Setup
-
-1. Clone this repository
-2. Install dependencies:
-   ```
-   npm install
-   ```
-3. Configure your Cloudflare account in Wrangler:
-   ```
-   npx wrangler login
-   ```
-4. Create an R2 bucket:
-   ```
-   npx wrangler r2 bucket create release-server-bucket
-   ```
-5. Update the environment variables in `wrangler.toml`:
-   ```toml
-   [vars]
-   CLOUDFLARE_ACCOUNT_ID = "your-account-id"
-   R2_ACCESS_KEY_ID = "your-access-key-id"
-   R2_SECRET_ACCESS_KEY = "your-secret-access-key"
-   R2_BUCKET_NAME = "release-server-bucket"
-   AUTH_SECRET = "your-auth-secret"
-   BASE_URL = "https://your-worker-url.workers.dev"
-   ```
-
-### Development
-
-To run the server locally:
-
-```
-npm run dev
-```
-
-### Deployment
-
-To deploy to Cloudflare Workers:
-
-```
-npm run deploy
-```
-
-## Authentication
-
-The server uses bearer token authentication. The default token is `alpha-tester`, but you should change this in the environment variables for production use.
-
-## File Structure
-
-- `worker.js`: The main worker code
-- `wrangler.toml`: Cloudflare Workers configuration
-- `package.json`: Node.js dependencies
-
-## Environment Variables
-
-- `CLOUDFLARE_ACCOUNT_ID`: Your Cloudflare account ID
-- `R2_ACCESS_KEY_ID`: R2 access key ID
-- `R2_SECRET_ACCESS_KEY`: R2 secret access key
-- `R2_BUCKET_NAME`: R2 bucket name
-- `AUTH_SECRET`: Authentication token
-- `BASE_URL`: Base URL for the server (optional)
+- `file`: The binary file to upload (required)
+- `signature`: Signature for the file (optional)
+- `notes`: Release notes (optional) 
