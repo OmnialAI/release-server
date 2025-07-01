@@ -8,6 +8,11 @@ binding = "STORAGE"
 bucket_name = "release-server-bucket"
 preview_bucket_name = "release-server-dev-bucket"
 
+# KV namespace for download passcodes
+[[kv_namespaces]]
+binding = "DOWNLOAD_CODES"
+id = "425177bb5c9f45d0a8825b97379ed45c"
+
 # Environment variables
 [vars]
 CLOUDFLARE_ACCOUNT_ID = "0b1fecf0fe221cca7a711f11f83d5b0f"
@@ -15,4 +20,4 @@ R2_ACCESS_KEY_ID = "fd2946b80dc0de632140cf38a240e515"
 R2_SECRET_ACCESS_KEY = "087df8724428a8bcf047f48f8dbde6db69e10c2e34c816760000d9458153521a"
 R2_BUCKET_NAME = "release-server-bucket"
 AUTH_SECRET = "alpha-tester"
-BASE_URL = "https://release.omnial.app" 
+BASE_URL = "https://release.tryaemon.com" 

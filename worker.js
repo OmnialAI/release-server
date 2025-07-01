@@ -5,7 +5,7 @@
  */
 
 import { handleOptions } from './lib/auth.js';
-import { handleVersionCheck, handleDownload, handleUpload } from './lib/handlers.js';
+import { handleVersionCheck, handleDownload, handleUpload, handleGenerateDownloadCode, handleDmgDownload } from './lib/handlers.js';
 
 // Main handler function
 export default {
@@ -28,6 +28,10 @@ export default {
       return handleDownload(request, url);
     } else if (url.pathname.startsWith('/api/upload/')) {
       return handleUpload(request, url);
+    } else if (url.pathname.startsWith('/api/generate-download-code')) {
+      return handleGenerateDownloadCode(request, url);
+    } else if (url.pathname.startsWith('/api/dmg-download/')) {
+      return handleDmgDownload(request, url);
     } else if (url.pathname.startsWith('/download/')) {
       // Redirect /download/ URLs to /api/download/ with appropriate path
       const fileName = url.pathname.replace('/download/', '');
